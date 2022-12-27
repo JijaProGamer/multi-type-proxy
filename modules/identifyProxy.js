@@ -3,7 +3,7 @@ module.exports = (data) => {
         return "socks4"
     }
 
-    if(data[0] == 0x05){
+    if(data[0] == 0x05 || data[0] == 0x01){
         return "socks5"
     }
 
