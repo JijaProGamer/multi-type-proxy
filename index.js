@@ -20,8 +20,8 @@ let defaultDNS = (address) => {
 let defaultDataProcessor = (upConnection, connections) => {
     return new Promise((resolve, reject) => {        
         let upstream = net.connect(upConnection.port, upConnection.address, () => {
-            connections.upstream.pipe(upstream)
-            upstream.pipe(connections.downstream)
+            connections.up.pipe(upstream)
+            upstream.pipe(connections.down)
 
             resolve(upstream)
         })
@@ -75,11 +75,11 @@ class Proxy {
                             address,
                             port: result.port
                         }, {
-                            upstream: up,
-                            downstream: down,
+                            up: up,
+                            down: down,
                         }).then((upstream) => {                            
                             down.pipe(socket)
-                            up.pipe(upstream)
+                            socket.pipe(up)
 
                             upstream.on("error", (err) => socket.end)
                             upstream.on("end", socket.end)
