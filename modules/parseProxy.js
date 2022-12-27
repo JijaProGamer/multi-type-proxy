@@ -71,8 +71,8 @@ module.exports = (type, data, stage) => {
 
             if(uLen > 0){
                 auth = {
-                    password: uBuff.toString('utf8', 0, pLen),
-                    username: pBuff.toString('utf8', 0, uLen)
+                    password: pBuff.toString('utf8', 0, pLen),
+                    username: uBuff.toString('utf8', 0, uLen)
                 }
             }
 
