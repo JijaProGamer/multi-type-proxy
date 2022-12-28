@@ -1,3 +1,21 @@
+advanced nodejs proxy server
+supports http, socks4 and socks5
+
+can transfer both http and https data
+
+can intercept the http/https data to make an rotating proxy,
+an cache to save bandwith or to spy on http requests
+
+Can handle 1 gigabit of download and upload at the same time 
+with only 50MB ram usage and 2% cpu usageon an I5 10400
+
+Can make an blazing fast proxy supporting http socks4 and socks5
+connections at the same time with low CPU and RAM usage
+
+Only uses the internal net and dns module of node
+
+Can handle authentification on socks5 http and partially on socks4
+
 ```js
 let proxyAPI = require("multi-type-proxy")
 // require the module
@@ -39,6 +57,33 @@ function proxyServer.procError
 // Its called when the network processor returns a error
 // Should never happen unless the network is unstable
 // The only argument is the error itself
+
+function proxyServer.data_processor
+// This is used to transfer data between the client
+// and the upstream server
+
+// Pretty much everything is handled by this module, so
+// you only have to do the bare minimum
+
+// the first argument is an object {port, address} of the server to connect to
+// the second argument is an object {up, down}
+// up is the new connection you are connecting
+// down is the client socket
+
+// ********** example function ***********
+
+let net = require("node:net")
+
+proxyServer.data_processor = (upConnection, connections) => {
+    return new Promise((resolve, reject) => {        
+        let upstream = net.connect(upConnection.port, upConnection.address, () => {
+            connections.up.pipe(upstream)
+            upstream.pipe(connections.down)
+
+            resolve(upstream)
+        })
+    })
+}
 
 function proxyServer.dnsGet
 // you have to return a promise!
