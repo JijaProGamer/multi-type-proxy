@@ -20,7 +20,7 @@ let defaultDNS = (address) => {
 }
 
 let defaultDataProcessor = (upConnection, connections) => {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {        
         let upstream = net.connect(upConnection.port, upConnection.address, () => {
             connections.up.pipe(upstream)
             upstream.pipe(connections.down)
@@ -39,8 +39,8 @@ class Proxy {
         if (!this.authenticate) this.authenticate = () => { return true }
         if (!this.dnsGet) this.dnsGet = defaultDNS
 
-        if (!this.dnsError) this.dnsError = console.log
-        if (!this.procError) this.procError = console.log
+        if(!this.dnsError) this.dnsError = console.log
+        if(!this.procError) this.procError = console.log
 
         if (!this.data_processor) this.data_processor = defaultDataProcessor
 
@@ -49,7 +49,6 @@ class Proxy {
         server.on("connection", (socket) => {
             let stage = 0
             let auth
-            let didAuth = false
 
             let initListener = async (data) => {
                 let type = identify(data)
@@ -67,11 +66,11 @@ class Proxy {
 
                 if (!canContinue) {
                     sendMessage(type, "SERVER_DOWN", socket)
-
+                    
                     socket.removeListener("data", initListener)
                     return socket.end()
                 } else {
-                    if (canContinue !== true) {
+                    if(canContinue !== true){
                         sendMessage(type, canContinue, socket)
 
                         socket.removeListener("data", initListener)
@@ -79,11 +78,12 @@ class Proxy {
                     }
                 }
 
-                if ((auth && !didAuth) || result.finished) {
-                    let authGood = await this.authenticate(auth)
+                if (result.finished) {
+                    socket.removeListener("data", initListener)
 
-                    if (!authGood) {
-                        if (auth) {
+                    let authGood = await this.authenticate(auth)
+                    if (!authGood){
+                        if(auth){
                             sendMessage(type, "FAILED_BAD_AUTH", socket)
                         } else {
                             sendMessage(type, "FAILED_NO_AUTH", socket)
@@ -91,15 +91,7 @@ class Proxy {
 
                         socket.removeListener("data", initListener)
                         return socket.end()
-                    } else {
-                        if (type == "socks5") {
-                            sendMessage("socks5", "CONTINUE", socket)
-                        }
                     }
-                }
-
-                if (result.finished) {
-                    socket.removeListener("data", initListener)
 
                     this.dnsGet(result.host).then((address) => {
                         this.connected({ address, port: result.port }, auth)
@@ -113,7 +105,7 @@ class Proxy {
                         }, {
                             up: up,
                             down: down,
-                        }).then((upstream) => {
+                        }).then((upstream) => {                            
                             down.pipe(socket)
                             socket.pipe(up)
 
@@ -146,13 +138,19 @@ class Proxy {
                         socket.end()
                     })
                 } else {
-                    if (type == "socks5" && stage == 0) {
-                        if (result.authType == "user:pass") {
-                            sendMessage("socks5", "CONTINUE_AUTH", socket)
-                        } else {
-                            sendMessage("socks5", "CONTINUE_NO_AUTH", socket)
+                    if (type == "socks5") {
+                        switch (stage) {
+                            case 0:
+                                if (result.authType == "user:pass") {
+                                    sendMessage("socks5", "CONTINUE_AUTH", socket)
+                                } else {
+                                    sendMessage("socks5", "CONTINUE_NO_AUTH", socket)
+                                }
+                                break;
+                            case 1:
+                                sendMessage("socks5", "CONTINUE", socket)
+                                break;
                         }
-
                     } else if (type == "socks4") {
                         sendMessage("socks4", "CONTINUE", socket)
                     }
@@ -175,11 +173,11 @@ class Proxy {
         this.server = server
     }
 
-    listen(port) {
+    listen(port){
         this.server.listen(port)
     }
 
-    close() {
+    close(){
         this.server.close()
     }
 }
