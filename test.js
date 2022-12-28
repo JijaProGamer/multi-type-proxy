@@ -1,2 +1,6 @@
 let proxyClass = require("./index")
-let proxy = new proxyClass(1080)
+let proxy = new proxyClass()
+proxy.procError = () => {}
+proxy.dnsError = () => {}
+
+proxy.listen(1080)

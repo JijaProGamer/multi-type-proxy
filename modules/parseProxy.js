@@ -22,9 +22,6 @@ module.exports = (type, data, stage) => {
             var port = parseInt(ParentHost[1]) || (isTTL && 443 || 80)
             var auth = options["Proxy-Authorization"]
 
-            var username
-            var password
-
             if (auth) {
                 const decodedCredentials = Buffer.from(auth.split(" ")[1], 'base64').toString('utf8').split(":")
                 auth = {}

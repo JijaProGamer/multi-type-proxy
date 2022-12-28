@@ -4,6 +4,8 @@ const dns = require("dns")
 const identify = require("./modules/identifyProxy")
 const parse = require("./modules/parseProxy");
 const hideProxyInfo = require('./modules/hideProxyInfo');
+const sendMessage = require("./modules/sendMessage")
+
 const { PassThrough } = require('stream');
 
 let defaultDNS = (address) => {
@@ -18,7 +20,7 @@ let defaultDNS = (address) => {
 }
 
 let defaultDataProcessor = (upConnection, connections) => {
-    return new Promise((resolve, reject) => {        
+    return new Promise((resolve, reject) => {
         let upstream = net.connect(upConnection.port, upConnection.address, () => {
             connections.up.pipe(upstream)
             upstream.pipe(connections.down)
@@ -29,11 +31,17 @@ let defaultDataProcessor = (upConnection, connections) => {
 }
 
 class Proxy {
-    constructor(port) {
+    static #e = -1
+
+    constructor() {
         if (!this.connected) this.connected = () => { }
         if (!this.handler) this.handler = () => { return true }
         if (!this.authenticate) this.authenticate = () => { return true }
         if (!this.dnsGet) this.dnsGet = defaultDNS
+
+        if (!this.dnsError) this.dnsError = console.log
+        if (!this.procError) this.procError = console.log
+
         if (!this.data_processor) this.data_processor = defaultDataProcessor
 
         let server = net.createServer()
@@ -41,32 +49,60 @@ class Proxy {
         server.on("connection", (socket) => {
             let stage = 0
             let auth
+            let didAuth = false
 
             let initListener = async (data) => {
                 let type = identify(data)
-                if (!type) return socket.end()
-
                 let result = parse(type, data, stage)
-                if (!result) return socket.end()
 
-                if (type == "http") data = hideProxyInfo(data.toString())
-
-                let canContinue = await this.handler(type, stage, result)
-                if (!canContinue) {
+                if (result.auth) auth = result.auth
+                if (result.failed) {
                     socket.removeListener("data", initListener)
                     return socket.end()
                 }
 
-                if (result.auth) auth = result.auth
+                if (type == "http") data = hideProxyInfo(data.toString())
+
+                let canContinue = await this.handler(type, stage, result)
+
+                if (!canContinue) {
+                    sendMessage(type, "SERVER_DOWN", socket)
+
+                    socket.removeListener("data", initListener)
+                    return socket.end()
+                } else {
+                    if (canContinue !== true) {
+                        sendMessage(type, canContinue, socket)
+
+                        socket.removeListener("data", initListener)
+                        return socket.end()
+                    }
+                }
+
+                if ((auth && !didAuth) || result.finished) {
+                    let authGood = await this.authenticate(auth)
+
+                    if (!authGood) {
+                        if (auth) {
+                            sendMessage(type, "FAILED_BAD_AUTH", socket)
+                        } else {
+                            sendMessage(type, "FAILED_NO_AUTH", socket)
+                        }
+
+                        socket.removeListener("data", initListener)
+                        return socket.end()
+                    } else {
+                        if (type == "socks5") {
+                            sendMessage("socks5", "CONTINUE", socket)
+                        }
+                    }
+                }
 
                 if (result.finished) {
                     socket.removeListener("data", initListener)
 
-                    let authGood = await this.authenticate(auth)
-                    if (!authGood) return socket.end()
-
                     this.dnsGet(result.host).then((address) => {
-                        this.connected({ address, port }, auth)
+                        this.connected({ address, port: result.port }, auth)
 
                         let up = new PassThrough()
                         let down = new PassThrough()
@@ -77,7 +113,7 @@ class Proxy {
                         }, {
                             up: up,
                             down: down,
-                        }).then((upstream) => {                            
+                        }).then((upstream) => {
                             down.pipe(socket)
                             socket.pipe(up)
 
@@ -87,41 +123,38 @@ class Proxy {
                             switch (type) {
                                 case "http":
                                     if (result.isTTL) {
-                                        down.write('HTTP/1.1 200 OK\r\n\r\n');
+                                        sendMessage("http", "OK", down)
                                     } else {
                                         up.write(data)
                                     }
 
                                     break
-                                case "socks4":
-                                    down.write(Buffer.from([0, 0x5a, 0, 0, 0, 0, 0, 0]))
-                                    break
-                                case "socks5":
-                                    down.write(Buffer.from([5, 0, 0, 1, 0, 0, 0, 0, 0, 0]))
-                                    break
+                                default:
+                                    sendMessage(type, "OK", down)
+                                    break;
                             }
-                        }).catch(() => {
+                        }).catch((err) => {
+                            sendMessage(type, "SERVER_DOWN", socket)
+
+                            this.procError(err)
                             socket.end()
                         })
                     }).catch((err) => {
+                        sendMessage(type, "NOT_FOUND", socket)
+
+                        this.dnsError(err)
                         socket.end()
                     })
                 } else {
-                    if (type == "socks5") {
-                        switch (stage) {
-                            case 0:
-                                if (result.authType == "user:pass") {
-                                    socket.write(Buffer.from([0x05, 0x02]))
-                                } else {
-                                    socket.write(Buffer.from([0x05, 0x00]))
-                                }
-                                break;
-                            case 1:
-                                socket.write(Buffer.from([0x01, 0x00]))
-                                break;
+                    if (type == "socks5" && stage == 0) {
+                        if (result.authType == "user:pass") {
+                            sendMessage("socks5", "CONTINUE_AUTH", socket)
+                        } else {
+                            sendMessage("socks5", "CONTINUE_NO_AUTH", socket)
                         }
-                    } else {
-                        socket.write(Buffer.from([0x05, 0x00]))
+
+                    } else if (type == "socks4") {
+                        sendMessage("socks4", "CONTINUE", socket)
                     }
                 }
 
@@ -130,14 +163,24 @@ class Proxy {
             }
 
             socket.on("data", initListener)
-            socket.on("error", (err) => { })
+            socket.on("error", (err) => {
+                this.procError(err)
+            })
         })
 
         server.on("error", (err) => {
-            console.log(err)
+            this.procError(err)
         })
 
-        server.listen(port)
+        this.server = server
+    }
+
+    listen(port) {
+        this.server.listen(port)
+    }
+
+    close() {
+        this.server.close()
     }
 }
 
