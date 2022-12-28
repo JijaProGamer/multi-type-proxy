@@ -1,6 +1,6 @@
 {
-  "name": "cgnat-proxy",
-  "version": "1.0.0",
+  "name": "multi-type-proxy",
+  "version": "1.0.1",
   "description": "",
   "main": "index.js",
   "scripts": {

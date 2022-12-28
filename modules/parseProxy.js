@@ -48,7 +48,6 @@ module.exports = (type, data, stage) => {
 
             var offset = 8
             var uLen = 0
-            let pLen = 0
 
             while (data[offset] !== 0x00 && data[offset]) {
                 uBuff[uLen] = data[offset];
@@ -56,25 +55,16 @@ module.exports = (type, data, stage) => {
                 offset++;
             }
 
-            offset++;
-
-            while (data[offset] !== 0x00 && data[offset]) {
-                pBuff[pLen] = data[offset];
-                pLen++;
-                offset++;
-            }
-
             var auth
 
             if(uLen > 0){
                 auth = {
-                    password: pBuff.toString('utf8', 0, pLen),
                     username: uBuff.toString('utf8', 0, uLen)
                 }
             }
 
             return {
-                isTTL: connection_types.socks4[cmd] == "CONNECT",
+                isTTL: port == 443,
                 host: data.slice(4, 8).join('.'),
                 port: parseFloat(data.readUInt16BE(2)),
                 request: data,
@@ -140,14 +130,14 @@ module.exports = (type, data, stage) => {
                             break;
                         default:
                             return {
-                                isTTL: connection_types.socks5[addressType] == "CONNECT",
+                                isTTL: port == 443,
                                 failed: true,
                                 request: data,
                             }
                     }
 
                     return {
-                        isTTL: connection_types.socks5[cmd] == "CONNECT",
+                        isTTL: port == 443,
                         host,
                         port,
                         finished: true,

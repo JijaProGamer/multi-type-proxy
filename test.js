@@ -3,12 +3,26 @@ let proxy = new proxyClass()
 proxy.procError = () => {}
 proxy.dnsError = () => {}
 
-proxy.handler = (k, e, upstream) => {
-    if(upstream.host.includes("google")){
-        return false
-    }
+const net = require("net")
 
-    return true
+proxy.data_processor = (upConnection, connections) => {
+    return new Promise((resolve, reject) => {        
+        let upstream = net.connect(upConnection.port, upConnection.address, () => {                      
+            connections.up.on("data", (data) => {
+                upstream.write(data)
+            })
+
+            upstream.on("data", (data) => {
+                connections.down.write(data)
+            })
+
+            resolve(upstream)
+        })
+    })
+}
+
+proxy.handler = (k, e, upstream) => {
+    return true //!upstream.isTTL
 }
 
 proxy.listen(1080)
