@@ -81,7 +81,7 @@ class Proxy {
                 if (result.finished) {
                     socket.removeListener("data", initListener)
 
-                    let authGood = await this.authenticate(auth)
+                    let authGood = await this.authenticate(auth, socket)
                     if (!authGood){
                         if(auth){
                             sendMessage(type, "FAILED_BAD_AUTH", socket)
@@ -105,7 +105,7 @@ class Proxy {
                         }, {
                             up: up,
                             down: down,
-                        }).then((upstream) => {                            
+                        }, authGood).then((upstream) => {                            
                             down.pipe(socket)
                             socket.pipe(up)
 

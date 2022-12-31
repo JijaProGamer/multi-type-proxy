@@ -74,7 +74,7 @@ function proxyServer.data_processor
 
 let net = require("node:net")
 
-proxyServer.data_processor = (upConnection, connections) => {
+proxyServer.data_processor = (upConnection, connections, authGood) => {
     return new Promise((resolve, reject) => {        
         let upstream = net.connect(upConnection.port, upConnection.address, () => {
             connections.up.pipe(upstream)
@@ -118,7 +118,7 @@ function proxyServer.authenticate
 // password may be of length 0 if you are using socks4
 // because socks4 only has username authentification
 
-proxyServer.authenticate = (auth) => {
+proxyServer.authenticate = (auth, authGood) => {
     if(!auth){
         return false // no credentials
     } else {
